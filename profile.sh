@@ -28,7 +28,7 @@ function echo_failure
 # Author: Glenn Jackman (profile: https://stackoverflow.com/users/7552/glenn-jackman)
 # Original article: https://stackoverflow.com/a/14367368
 function is_in_array
-{ 
+{
     local array="$1[@]"
     local seeking=$2
     local in=1
@@ -106,7 +106,7 @@ fi
 # Check that the corresponding submission script exists #
 #########################################################
 slurm_scripts_path="./slurm_scripts";
-slurm_script_to_submit="${slurm_scripts_path}/$2_$3.slurm";
+slurm_script_to_submit="${slurm_scripts_path}/$2_$3_profile.slurm";
 if [ -f "${slurm_script_to_submit}" ]; then
 	echo_success "The corresponding submission script \"${slurm_script_to_submit}\" has been found."
 else
