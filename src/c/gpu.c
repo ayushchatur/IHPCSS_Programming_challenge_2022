@@ -14,7 +14,7 @@
 #include <sched.h>
 #include <unistd.h>
 #include <string.h>
-
+#include "openacc.h"
 #include "util.h"
 
 /**
@@ -168,6 +168,7 @@ int main(int argc, char* argv[])
 		for(int i = 1; i <= ROWS_PER_MPI_PROCESS; i++)
 		{
 			// Process the cell at the first column, which has no left neighbour
+			#pragma acc parallel async vector(512)
 			if(temperatures[i][0] != MAX_TEMPERATURE)
 			{
 				temperatures[i][0] = (temperatures_last[i-1][0] +
@@ -175,6 +176,7 @@ int main(int argc, char* argv[])
 									  temperatures_last[i  ][1]) / 3.0;
 			}
 			// Process all cells between the first and last columns excluded, which each has both left and right neighbours
+			#pragam acc parallel 
 			for(int j = 1; j < COLUMNS_PER_MPI_PROCESS - 1; j++)
 			{
 				if(temperatures[i][j] != MAX_TEMPERATURE)
@@ -198,6 +200,7 @@ int main(int argc, char* argv[])
 		// -- SUBTASK 3: CALCULATE MAX TEMPERATURE CHANGE -- //
 		///////////////////////////////////////////////////////
 		my_temperature_change = 0.0;
+		#pragam acc parallel 
 		for(int i = 1; i <= ROWS_PER_MPI_PROCESS; i++)
 		{
 			for(int j = 0; j < COLUMNS_PER_MPI_PROCESS; j++)
@@ -249,6 +252,7 @@ int main(int argc, char* argv[])
 		//////////////////////////////////////////////////
 		// -- SUBTASK 5: UPDATE LAST ITERATION ARRAY -- //
 		//////////////////////////////////////////////////
+		#pragam acc parallel 
 		for(int i = 1; i <= ROWS_PER_MPI_PROCESS; i++)
 		{
 			for(int j = 0; j < COLUMNS_PER_MPI_PROCESS; j++)
@@ -269,6 +273,7 @@ int main(int argc, char* argv[])
 					if(j == my_rank)
 					{
 						// Copy locally my own temperature array in the global one
+						#pragam acc parallel 
 						for(int k = 0; k < ROWS_PER_MPI_PROCESS; k++)
 						{
 							for(int l = 0; l < COLUMNS_PER_MPI_PROCESS; l++)
