@@ -165,10 +165,11 @@ int main(int argc, char* argv[])
 		/////////////////////////////////////////////
 		// -- SUBTASK 2: PROPAGATE TEMPERATURES -- //
 		/////////////////////////////////////////////
+		#pragma acc kernels loop gang(32), vector(16)
 		for(int i = 1; i <= ROWS_PER_MPI_PROCESS; i++)
 		{
 			// Process the cell at the first column, which has no left neighbour
-			#pragma acc parallel async vector(512)
+			
 			if(temperatures[i][0] != MAX_TEMPERATURE)
 			{
 				temperatures[i][0] = (temperatures_last[i-1][0] +
@@ -176,7 +177,7 @@ int main(int argc, char* argv[])
 									  temperatures_last[i  ][1]) / 3.0;
 			}
 			// Process all cells between the first and last columns excluded, which each has both left and right neighbours
-			#pragam acc parallel 
+			#pragma acc loop gang(16) vector(32) 
 			for(int j = 1; j < COLUMNS_PER_MPI_PROCESS - 1; j++)
 			{
 				if(temperatures[i][j] != MAX_TEMPERATURE)
@@ -200,9 +201,10 @@ int main(int argc, char* argv[])
 		// -- SUBTASK 3: CALCULATE MAX TEMPERATURE CHANGE -- //
 		///////////////////////////////////////////////////////
 		my_temperature_change = 0.0;
-		#pragam acc parallel 
+		#pragma acc kernels loop gang(32), vector(16)
 		for(int i = 1; i <= ROWS_PER_MPI_PROCESS; i++)
 		{
+			#pragma acc loop gang(16) vector(32) 
 			for(int j = 0; j < COLUMNS_PER_MPI_PROCESS; j++)
 			{
 				my_temperature_change = fmax(fabs(temperatures[i][j] - temperatures_last[i][j]), my_temperature_change);
@@ -252,9 +254,10 @@ int main(int argc, char* argv[])
 		//////////////////////////////////////////////////
 		// -- SUBTASK 5: UPDATE LAST ITERATION ARRAY -- //
 		//////////////////////////////////////////////////
-		#pragam acc parallel 
+		#pragma acc kernels loop gang(32), vector(16)
 		for(int i = 1; i <= ROWS_PER_MPI_PROCESS; i++)
 		{
+			#pragma acc loop gang(16) vector(32)
 			for(int j = 0; j < COLUMNS_PER_MPI_PROCESS; j++)
 			{
 				temperatures_last[i][j] = temperatures[i][j];
@@ -273,9 +276,10 @@ int main(int argc, char* argv[])
 					if(j == my_rank)
 					{
 						// Copy locally my own temperature array in the global one
-						#pragam acc parallel 
+						#pragma acc kernels loop gang(32), vector(16)
 						for(int k = 0; k < ROWS_PER_MPI_PROCESS; k++)
 						{
+							#pragma acc loop gang(16) vector(32)
 							for(int l = 0; l < COLUMNS_PER_MPI_PROCESS; l++)
 							{
 								snapshot[j * ROWS_PER_MPI_PROCESS + k][l] = temperatures[k + 1][l];
