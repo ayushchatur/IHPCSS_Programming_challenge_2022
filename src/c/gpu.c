@@ -46,7 +46,7 @@ int main(int argc, char* argv[])
 
 	// Rank of my up neighbour if any
 	int up_neighbour_rank = (my_rank == FIRST_PROCESS_RANK) ? MPI_PROC_NULL : my_rank - 1;
-	
+
 	// Rank of my down neighbour if any
 	int down_neighbour_rank = (my_rank == LAST_PROCESS_RANK) ? MPI_PROC_NULL : my_rank + 1;
 
@@ -78,7 +78,7 @@ int main(int argc, char* argv[])
 	//  /  o  \                              //
 	// /_______\                             //
 	///////////////////////////////////////////
-	
+
 	////////////////////////////////////////////////////////
 	// -- TASK 1: DISTRIBUTE DATA TO ALL MPI PROCESSES -- //
 	////////////////////////////////////////////////////////
@@ -130,7 +130,7 @@ int main(int argc, char* argv[])
 
 	// Wait for everybody to receive their part before we can start processing
 	MPI_Barrier(MPI_COMM_WORLD);
-	
+
 	/////////////////////////////
 	// TASK 2: DATA PROCESSING //
 	/////////////////////////////
@@ -138,10 +138,11 @@ int main(int argc, char* argv[])
 	/// Maximum temperature change observed across all MPI processes
 	double global_temperature_change;
 	/// Maximum temperature change for us
-	double my_temperature_change; 
+	double my_temperature_change;
 	/// The last snapshot made
 	double snapshot[ROWS][COLUMNS];
 
+	#pragma acc data copyin(temperatures_last[:][:]), create(temperatures)
 	while(total_time_so_far < MAX_TIME)
 	{
 		my_temperature_change = 0.0;
@@ -165,52 +166,54 @@ int main(int argc, char* argv[])
 		/////////////////////////////////////////////
 		// -- SUBTASK 2: PROPAGATE TEMPERATURES -- //
 		/////////////////////////////////////////////
-		#pragma acc kernels loop gang(32), vector(16)
-		for(int i = 1; i <= ROWS_PER_MPI_PROCESS; i++)
-		{
-			// Process the cell at the first column, which has no left neighbour
-			
-			if(temperatures[i][0] != MAX_TEMPERATURE)
+
+			#pragma acc kernels
+			for(int i = 1; i <= ROWS_PER_MPI_PROCESS; i++)
 			{
-				temperatures[i][0] = (temperatures_last[i-1][0] +
-									  temperatures_last[i+1][0] +
-									  temperatures_last[i  ][1]) / 3.0;
-			}
-			// Process all cells between the first and last columns excluded, which each has both left and right neighbours
-			#pragma acc loop gang(16) vector(32) 
-			for(int j = 1; j < COLUMNS_PER_MPI_PROCESS - 1; j++)
-			{
-				if(temperatures[i][j] != MAX_TEMPERATURE)
+				// Process the cell at the first column, which has no left neighbour
+
+				if(temperatures[i][0] != MAX_TEMPERATURE)
 				{
-					temperatures[i][j] = 0.25 * (temperatures_last[i-1][j  ] +
-												 temperatures_last[i+1][j  ] +
-												 temperatures_last[i  ][j-1] +
-												 temperatures_last[i  ][j+1]);
+					temperatures[i][0] = (temperatures_last[i-1][0] +
+										  temperatures_last[i+1][0] +
+										  temperatures_last[i  ][1]) / 3.0;
+				}
+				// Process all cells between the first and last columns excluded, which each has both left and right neighbours
+				#pragma acc loop num_gangs(1024)
+				for(int j = 1; j < COLUMNS_PER_MPI_PROCESS - 1; j++)
+				{
+					if(temperatures[i][j] != MAX_TEMPERATURE)
+					{
+						temperatures[i][j] = 0.25 * (temperatures_last[i-1][j  ] +
+													 temperatures_last[i+1][j  ] +
+													 temperatures_last[i  ][j-1] +
+													 temperatures_last[i  ][j+1]);
+					}
+				}
+				// Process the cell at the last column, which has no right neighbour
+				if(temperatures[i][COLUMNS_PER_MPI_PROCESS - 1] != MAX_TEMPERATURE)
+				{
+					temperatures[i][COLUMNS_PER_MPI_PROCESS - 1] = (temperatures_last[i-1][COLUMNS_PER_MPI_PROCESS - 1] +
+																    temperatures_last[i+1][COLUMNS_PER_MPI_PROCESS - 1] +
+																    temperatures_last[i  ][COLUMNS_PER_MPI_PROCESS - 2]) / 3.0;
 				}
 			}
-			// Process the cell at the last column, which has no right neighbour
-			if(temperatures[i][COLUMNS_PER_MPI_PROCESS - 1] != MAX_TEMPERATURE)
-			{
-				temperatures[i][COLUMNS_PER_MPI_PROCESS - 1] = (temperatures_last[i-1][COLUMNS_PER_MPI_PROCESS - 1] +
-															    temperatures_last[i+1][COLUMNS_PER_MPI_PROCESS - 1] +
-															    temperatures_last[i  ][COLUMNS_PER_MPI_PROCESS - 2]) / 3.0;
-			}
-		}
+
 
 		///////////////////////////////////////////////////////
 		// -- SUBTASK 3: CALCULATE MAX TEMPERATURE CHANGE -- //
 		///////////////////////////////////////////////////////
 		my_temperature_change = 0.0;
-		#pragma acc kernels loop gang(32), vector(16)
+		#pragma acc kernels
 		for(int i = 1; i <= ROWS_PER_MPI_PROCESS; i++)
 		{
-			#pragma acc loop gang(16) vector(32) 
+			#pragma acc loop num_gangs(1024)
 			for(int j = 0; j < COLUMNS_PER_MPI_PROCESS; j++)
 			{
 				my_temperature_change = fmax(fabs(temperatures[i][j] - temperatures_last[i][j]), my_temperature_change);
 			}
 		}
-	
+
 		//////////////////////////////////////////////////////////
 		// -- SUBTASK 4: FIND MAX TEMPERATURE CHANGE OVERALL -- //
 		//////////////////////////////////////////////////////////
@@ -218,7 +221,7 @@ int main(int argc, char* argv[])
 		{
 			// Send my temperature delta to the master MPI process
 			MPI_Ssend(&my_temperature_change, 1, MPI_DOUBLE, MASTER_PROCESS_RANK, 0, MPI_COMM_WORLD);
-			
+
 			// Receive the total delta calculated by the MPI process based on all MPI processes delta
 			MPI_Recv(&global_temperature_change, 1, MPI_DOUBLE, MASTER_PROCESS_RANK, MPI_ANY_TAG, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
 		}
@@ -254,10 +257,10 @@ int main(int argc, char* argv[])
 		//////////////////////////////////////////////////
 		// -- SUBTASK 5: UPDATE LAST ITERATION ARRAY -- //
 		//////////////////////////////////////////////////
-		#pragma acc kernels loop gang(32), vector(16)
+		#pragma acc kernels
 		for(int i = 1; i <= ROWS_PER_MPI_PROCESS; i++)
 		{
-			#pragma acc loop gang(16) vector(32)
+			#pragma acc loop num_gangs(1024)
 			for(int j = 0; j < COLUMNS_PER_MPI_PROCESS; j++)
 			{
 				temperatures_last[i][j] = temperatures[i][j];
@@ -276,10 +279,10 @@ int main(int argc, char* argv[])
 					if(j == my_rank)
 					{
 						// Copy locally my own temperature array in the global one
-						#pragma acc kernels loop gang(32), vector(16)
+						#pragma acc kernels
 						for(int k = 0; k < ROWS_PER_MPI_PROCESS; k++)
 						{
-							#pragma acc loop gang(16) vector(32)
+							#pragma acc loop num_gangs(1024)
 							for(int l = 0; l < COLUMNS_PER_MPI_PROCESS; l++)
 							{
 								snapshot[j * ROWS_PER_MPI_PROCESS + k][l] = temperatures[k + 1][l];
@@ -297,7 +300,7 @@ int main(int argc, char* argv[])
 			else
 			{
 				// Send my array to the master MPI process
-				MPI_Ssend(&temperatures[1][0], ROWS_PER_MPI_PROCESS * COLUMNS_PER_MPI_PROCESS, MPI_DOUBLE, MASTER_PROCESS_RANK, 0, MPI_COMM_WORLD); 
+				MPI_Ssend(&temperatures[1][0], ROWS_PER_MPI_PROCESS * COLUMNS_PER_MPI_PROCESS, MPI_DOUBLE, MASTER_PROCESS_RANK, 0, MPI_COMM_WORLD);
 			}
 		}
 
