@@ -17,4 +17,4 @@ export OMP_PLACES=sockets
 
 # Run the binary
 module load nvhpc/21.2
-mpirun -np ${SLURM_NTASKS} --map-by socket -bind-to socket -report-bindings nsys profile -y 10 -d 10 -f -o profil1_${SLURM_JOB_ID}.qdrep ./bin/${1}/gpu_big > $2
+mpirun -np ${SLURM_NTASKS} --map-by socket -bind-to socket -report-bindings nsys profile -y 10 -d 10 -f true -o profil1_${SLURM_JOB_ID}.qdrep ./bin/${1}/gpu_big > $2
