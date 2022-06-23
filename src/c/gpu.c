@@ -282,7 +282,7 @@ int main(int argc, char* argv[])
 						#pragma acc loop gang
 						for(int k = 0; k < ROWS_PER_MPI_PROCESS; k++)
 						{
-							#pragma acc loop num_gangs(1024)
+							#pragma acc loop worker
 							for(int l = 0; l < COLUMNS_PER_MPI_PROCESS; l++)
 							{
 								snapshot[j * ROWS_PER_MPI_PROCESS + k][l] = temperatures[k + 1][l];
