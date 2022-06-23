@@ -167,7 +167,7 @@ int main(int argc, char* argv[])
 		// -- SUBTASK 2: PROPAGATE TEMPERATURES -- //
 		/////////////////////////////////////////////
 
-			#pragma acc kernels
+			#pragma acc loop gang
 			for(int i = 1; i <= ROWS_PER_MPI_PROCESS; i++)
 			{
 				// Process the cell at the first column, which has no left neighbour
@@ -179,7 +179,7 @@ int main(int argc, char* argv[])
 										  temperatures_last[i  ][1]) / 3.0;
 				}
 				// Process all cells between the first and last columns excluded, which each has both left and right neighbours
-				#pragma acc loop num_gangs(1024)
+				#pragma acc loop worker
 				for(int j = 1; j < COLUMNS_PER_MPI_PROCESS - 1; j++)
 				{
 					if(temperatures[i][j] != MAX_TEMPERATURE)
@@ -204,10 +204,10 @@ int main(int argc, char* argv[])
 		// -- SUBTASK 3: CALCULATE MAX TEMPERATURE CHANGE -- //
 		///////////////////////////////////////////////////////
 		my_temperature_change = 0.0;
-		#pragma acc kernels
+		#pragma acc loop gang
 		for(int i = 1; i <= ROWS_PER_MPI_PROCESS; i++)
 		{
-			#pragma acc loop num_gangs(1024)
+			#pragma acc loop worker
 			for(int j = 0; j < COLUMNS_PER_MPI_PROCESS; j++)
 			{
 				my_temperature_change = fmax(fabs(temperatures[i][j] - temperatures_last[i][j]), my_temperature_change);
@@ -257,10 +257,10 @@ int main(int argc, char* argv[])
 		//////////////////////////////////////////////////
 		// -- SUBTASK 5: UPDATE LAST ITERATION ARRAY -- //
 		//////////////////////////////////////////////////
-		#pragma acc kernels
+		#pragma acc loop gang
 		for(int i = 1; i <= ROWS_PER_MPI_PROCESS; i++)
 		{
-			#pragma acc loop num_gangs(1024)
+			#pragma acc loop worker
 			for(int j = 0; j < COLUMNS_PER_MPI_PROCESS; j++)
 			{
 				temperatures_last[i][j] = temperatures[i][j];
@@ -279,7 +279,7 @@ int main(int argc, char* argv[])
 					if(j == my_rank)
 					{
 						// Copy locally my own temperature array in the global one
-						#pragma acc kernels
+						#pragma acc loop gang
 						for(int k = 0; k < ROWS_PER_MPI_PROCESS; k++)
 						{
 							#pragma acc loop num_gangs(1024)
